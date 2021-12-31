@@ -1,7 +1,7 @@
 # Ignore all files without extensions (unix executable files)
-*
-!*.*
-!*/
+# *
+# !*.*
+# !*/
 
 # Ignore all binary outputs
 *.so
@@ -16,5 +16,3 @@ nimcache/
 
 # Ignore editor settings
 .vscode
-
-

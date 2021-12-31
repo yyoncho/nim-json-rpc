@@ -1,4 +1,4 @@
-import unittest, json, strutils
+isEmptyOrWhitespace unittest, json, strutils
 import httputils
 import ../json_rpc/[rpcserver, rpcclient]
 
