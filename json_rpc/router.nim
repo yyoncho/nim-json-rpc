@@ -170,7 +170,7 @@ macro rpc*(server: RpcRouter, path: string, body: untyped): untyped =
   result.add quote do:
     `server`.register(`path`, `rpcProcWrapper`)
 
-  echo result.repr
+  # echo result.repr
 
   when defined(nimDumpRpcs):
     echo "\n", pathStr, ": ", result.repr
