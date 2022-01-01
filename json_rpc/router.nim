@@ -156,19 +156,21 @@ macro rpc*(server: RpcRouter, path: string, body: untyped): untyped =
   if ReturnType == ident"JsonNode":
     # `JsonNode` results don't need conversion
     result.add quote do:
-      proc `rpcProcWrapper`(`paramsIdent`: JsonNode): Future[StringOfJson] {.async, gcsafe.} =
-        return StringOfJson($(await `rpcProcImpl`(`paramsIdent`)))
+      proc `rpcProcWrapper`(`paramsIdent`: JsonNode): Future[RpcResult] {.async, gcsafe.} =
+        return some(StringOfJson($(await `rpcProcImpl`(`paramsIdent`))))
   elif ReturnType == ident"StringOfJson":
     result.add quote do:
-      proc `rpcProcWrapper`(`paramsIdent`: JsonNode): Future[StringOfJson] {.async, gcsafe.} =
-        return await `rpcProcImpl`(`paramsIdent`)
+      proc `rpcProcWrapper`(`paramsIdent`: JsonNode): Future[RpcResult] {.async, gcsafe.} =
+        return some(await `rpcProcImpl`(`paramsIdent`))
   else:
     result.add quote do:
-      proc `rpcProcWrapper`(`paramsIdent`: JsonNode): Future[StringOfJson] {.async, gcsafe.} =
-        return StringOfJson($(%(await `rpcProcImpl`(`paramsIdent`))))
+      proc `rpcProcWrapper`(`paramsIdent`: JsonNode): Future[RpcResult] {.async, gcsafe.} =
+        return some(StringOfJson($(%(await `rpcProcImpl`(`paramsIdent`)))))
 
   result.add quote do:
     `server`.register(`path`, `rpcProcWrapper`)
+
+  echo result.repr
 
   when defined(nimDumpRpcs):
     echo "\n", pathStr, ": ", result.repr

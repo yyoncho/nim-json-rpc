@@ -23,8 +23,8 @@ template hasMethod*(server: RpcServer, methodName: string): bool =
 
 proc executeMethod*(server: RpcServer,
                     methodName: string,
-                    args: JsonNode): Future[RpcResult] =
-  server.router.procs[methodName](args)
+                    args: JsonNode): Future[StringOfJson] {.async} =
+  return (await server.router.procs[methodName](args)).get
 
 # Wrapper for message processing
 
