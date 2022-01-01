@@ -23,12 +23,12 @@ template hasMethod*(server: RpcServer, methodName: string): bool =
 
 proc executeMethod*(server: RpcServer,
                     methodName: string,
-                    args: JsonNode): Future[StringOfJson] =
+                    args: JsonNode): Future[RpcResult] =
   server.router.procs[methodName](args)
 
 # Wrapper for message processing
 
-proc route*(server: RpcServer, line: string): Future[string] {.gcsafe.} =
+proc route*(server: RpcServer, line: string): Future[RpcResult] {.gcsafe.} =
   server.router.route(line)
 
 # Server registration

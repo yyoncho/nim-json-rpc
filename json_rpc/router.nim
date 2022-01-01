@@ -88,41 +88,40 @@ proc route*(router: RpcRouter, node: JsonNode): Future[RpcResult] {.async, gcsaf
       let res = await rpcProc(if params == nil: newJArray() else: params)
       return res.map((s) => wrapReply(id, s));
     except InvalidRequest as err:
+      debug "Error occurred within RPC", methodName = methodName, err = err.msg
       return some(wrapError(err.code, err.msg))
     except CatchableError as err:
-      # debug "Error occurred within RPC", methodName = methodName, err = err.msg
+      debug "Error occurred within RPC", methodName = methodName, err = err.msg
       return some(wrapError(
         SERVER_ERROR, methodName & " raised an exception", id, newJString(err.msg)))
 
-proc route*(router: RpcRouter, data: string): Future[Option[string]] {.async, gcsafe.} =
+proc route*(router: RpcRouter, data: string): Future[RpcResult] {.async, gcsafe.} =
   ## Route to RPC from string data. Data is expected to be able to be converted to Json.
   ## Returns string of Json from RPC result/error node
   let node =
     try: parseJson(data)
     except CatchableError as err:
-      return some(string(wrapError(JSON_PARSE_ERROR, err.msg)))
+      return some(wrapError(JSON_PARSE_ERROR, err.msg))
     except Exception as err:
       # TODO https://github.com/status-im/nimbus-eth2/issues/2430
-      return some(string(wrapError(JSON_PARSE_ERROR, err.msg)))
+      return some(wrapError(JSON_PARSE_ERROR, err.msg))
 
-  let res = await router.route(node);
-  return res.map((s) => string(s))
+  return await router.route(node);
 
-
-# proc tryRoute*(router: RpcRouter, data: JsonNode, fut: var Future[StringOfJson]): bool =
-#   ## Route to RPC, returns false if the method or params cannot be found.
-#   ## Expects json input and returns json output.
-#   let
-#     jPath = data.getOrDefault(methodField)
-#     jParams = data.getOrDefault(paramsField)
-#   if jPath.isEmpty or jParams.isEmpty:
-#     return false
-#   let
-#     path = jPath.getStr
-#     rpc = router.procs.getOrDefault(path)
-#   if rpc != nil:
-#     fut = rpc(jParams)
-#     return true
+proc tryRoute*(router: RpcRouter, data: JsonNode, fut: var Future[RpcResult]): bool =
+  ## Route to RPC, returns false if the method or params cannot be found.
+  ## Expects json input and returns json output.
+  let
+    jPath = data.getOrDefault(methodField)
+    jParams = data.getOrDefault(paramsField)
+  if jPath.isEmpty or jParams.isEmpty:
+    return false
+  let
+    path = jPath.getStr
+    rpc = router.procs.getOrDefault(path)
+  if rpc != nil:
+    fut = rpc(jParams)
+    return true
 
 macro rpc*(server: RpcRouter, path: string, body: untyped): untyped =
   ## Define a remote procedure call.
