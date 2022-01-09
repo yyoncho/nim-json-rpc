@@ -1,6 +1,5 @@
 import
-  unittest, json, chronicles,
-  ../json_rpc/[rpcclient, rpcserver, clients/config]
+  unittest, json, ../json_rpc/[rpcclient, rpcserver, clients/config]
 
 const
   compressionSupported = useNews
