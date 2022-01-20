@@ -1,5 +1,6 @@
 import
   strutils,
+  streams,
   faststreams/async_backend,
   asynctools/asyncpipe,
   faststreams/inputs,
@@ -14,13 +15,31 @@ type
   StreamClient* = ref object of RpcClient
     output*: AsyncOutputStream
   StreamConnection* = ref object of RpcServer
-    input*: AsyncInputStream
     output*: AsyncOutputStream
     client*: StreamClient
+  Mapper[T, U] = proc(input: T): Future[U] {.gcsafe, raises: [Defect, CatchableError, Exception].}
+  Consumer[T] = proc(input: T): Future[void] {.gcsafe, raises: [Defect, CatchableError, Exception].}
 
 proc wrapJsonRpcResponse(s: string): string =
   result = s & "\r\n"
   result = "Content-Length: " & $s.len & "\r\n\r\n" & s
+
+proc wrap[T, Q](callback: Mapper[T, Q]): RpcProc =
+  return
+    proc(input: JsonNode): Future[RpcResult] {.async} =
+      return some(StringOfJson($(%(await callback(to(input, T))))))
+
+proc wrap[T](callback: Consumer[T]): RpcProc =
+  return
+    proc(input: JsonNode): Future[RpcResult] {.async} =
+      await callback(to(input, T))
+      return none[StringOfJson]()
+
+proc register*[T, Q](server: RpcServer, name: string, rpc: Mapper[T, Q]) =
+  server.register(name, wrap(rpc))
+
+proc registerNotification*[T](server: RpcServer, name: string, rpc: Consumer[T]) =
+  server.register(name, wrap(rpc))
 
 method call*(self: StreamClient,
              name: string,
@@ -35,37 +54,32 @@ method call*(self: StreamClient,
   # add to awaiting responses
   self.awaiting[id] = newFut
 
-  # writeFile("/home/yyoncho/aa.txt", value)
   write(OutputStream(self.output), value)
-  discard flushAsync(self.output)
+  flush(self.output)
   return await newFut
-
 
 proc call*(connection: StreamConnection, name: string,
           params: JsonNode): Future[Response] {.gcsafe, raises: [Exception].} =
   return connection.client.call(name, params)
 
-proc skipWhitespace(x: string, pos: int): int =
-  result = pos
-  while result < x.len and x[result] in Whitespace:
-    inc result
+proc notify*(connection: StreamConnection, name: string,
+             params: JsonNode): Future[void] {.async.} =
+  let value = wrapJsonRpcResponse($rpcNotificationNode(name, params))
+  write(OutputStream(connection.output), value)
+  flush(connection.output)
 
-proc readMessage(input: AsyncInputStream): Future[Option[string]] {.async.} =
+proc readMessage*(input: AsyncInputStream): Future[Option[string]] {.async.} =
   var
     contentLen = -1
     headerStarted = false
 
-  echo "readMessage"
   while input.readable:
     let ln = await input.readLine()
-    echo "Line = ", ln
-
     if ln.len != 0:
       let sep = ln.find(':')
       if sep == -1:
         continue
-
-      let valueStart = skipWhitespace(ln, sep + 1)
+      let valueStart = skipWhitespace(ln, sep + 1) + sep + 1
       case ln[0 ..< sep]
       of "Content-Type":
         if ln.find("utf-8", valueStart) == -1 and ln.find("utf8", valueStart) == -1:
@@ -82,37 +96,57 @@ proc readMessage(input: AsyncInputStream): Future[Option[string]] {.async.} =
     else:
       if contentLen != -1:
         if input.readable(contentLen):
-           echo "before read"
-           let res = some(cast[string](`@`(input.read(contentLen))))
-           echo "after read"
-           return res
+           return some(cast[string](`@`(input.read(contentLen))))
         else:
            return none[string]();
-      else:
-        raise newException(Exception, "missing Content-Length header")
   return none[string]();
 
-proc start*(conn: StreamConnection): Future[void] {.async} =
-  var message = await readMessage(conn.input);
+proc readMessage*(input: Stream): Future[Option[string]] {.async.} =
+  var contentLen = -1
+  var headerStarted = false
+  while not input.atEnd():
+    let ln = input.readLine()
+    if ln.len != 0:
+      let sep = ln.find(':')
+      if sep == -1:
+        continue
+      let valueStart = skipWhitespace(ln, sep + 1) + sep + 1
+      case ln[0 ..< sep]
+      of "Content-Type":
+        if ln.find("utf-8", valueStart) == -1 and ln.find("utf8", valueStart) == -1:
+          raise newException(Exception, "only utf-8 is supported")
+      of "Content-Length":
+        if parseInt(ln, contentLen, valueStart) == 0:
+          raise newException(Exception, "invalid Content-Length: " &
+            ln.substr(valueStart))
+      else:
+        continue
+      headerStarted = true
+    elif not headerStarted:
+      continue
+    else: return some(input.readStr(contentLen))
+  return none[string]()
 
-  while message.isSome:
-    let json = parseJson(message.get);
-    if (json{"result"}.isNil and json{"error"}.isNil):
-      let res = await route(conn, message.get);
-      if res.isSome:
-        var resultMessage = wrapJsonRpcResponse(string(res.get));
-        write(OutputStream(conn.output), string(resultMessage));
-        discard flushAsync(conn.output)
-    else:
-      conn.client.processMessage(message.get)
+proc start*[T](conn: StreamConnection, input: T): Future[void] {.async} =
+  try:
+    var message = await readMessage(input);
+    while message.isSome:
+      let json = parseJson(message.get);
+      if (json{"result"}.isNil and json{"error"}.isNil):
+        let res = await route(conn, message.get);
+        if res.isSome:
+          let resultMessage = wrapJsonRpcResponse(string(res.get));
+          write(OutputStream(conn.output), resultMessage);
+          flush(conn.output)
+      else:
+        conn.client.processMessage(message.get)
+      message = await readMessage(input);
+  except IOError:
+    return
 
-    message = await readMessage(conn.input);
-
-proc new*(T: type StreamConnection, input: AsyncPipe, output: AsyncPipe): T =
+proc new*(T: type StreamConnection, output: AsyncPipe): T =
   let asyncOutput =  asyncPipeOutput(pipe = output, allowWaitFor = true);
-  T(input: asyncPipeInput(input),
-    output: asyncOutput,
-    client: StreamClient(output: asyncOutput))
+  T(output: asyncOutput, client: StreamClient(output: asyncOutput))
 
-proc new*(T: type StreamConnection, input: AsyncInputStream, output: AsyncOutputStream): T =
-  return T(input: input, output: output, client: StreamClient(output: output))
+proc new*(T: type StreamConnection, output: AsyncOutputStream): T =
+  return T(output: output, client: StreamClient(output: output))
