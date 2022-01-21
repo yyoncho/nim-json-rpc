@@ -35,9 +35,9 @@ method call*(self: StreamClient,
   # add to awaiting responses
   self.awaiting[id] = newFut
 
-  # writeFile("/home/yyoncho/aa.txt", value)
   write(OutputStream(self.output), value)
   flush(self.output)
+  echo "Called with >> ", rpcCallNode(name, params, id)
   return await newFut
 
 proc call*(connection: StreamConnection, name: string,
@@ -97,10 +97,12 @@ proc start*(conn: StreamConnection): Future[void] {.async} =
 
     while message.isSome:
       let json = parseJson(message.get);
+      echo "JSON received>>>", json
       if (json{"result"}.isNil and json{"error"}.isNil):
         let res = await route(conn, message.get);
         if res.isSome:
           var resultMessage = wrapJsonRpcResponse(string(res.get));
+          echo "Sending response>>> ", string(resultMessage)
           write(OutputStream(conn.output), string(resultMessage));
           flush(conn.output)
       else:
