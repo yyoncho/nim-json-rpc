@@ -47,32 +47,18 @@ suite "Client/server over JSONRPC":
   discard clientConnection.start();
 
   test "Simple call.":
-    var response = clientConnection.call("echo", %"input").waitFor().getStr
-    doAssert (response == "input")
-    doAssert (cachedInput.getStr == "input")
-    response = clientConnection.call("echo", %"input").waitFor().getStr
+    let response = clientConnection.call("echo", %"input").waitFor().getStr
     doAssert (response == "input")
     doAssert (cachedInput.getStr == "input")
 
-    response = clientConnection.call("echo", %"input").waitFor().getStr
-    doAssert (response == "input")
-    doAssert (cachedInput.getStr == "input")
   # test "Call with object.":
-  #   let input =  DemoObject(foo: 999999);
-  #   let response = clientConnection.call("echoDemoObject", %input).waitFor()
-  #   echo "After call with object..."
-
-  #   assert(to(response, DemoObject) == input)
-
-  #   echo "Performing third call..."
-
-  #   let response2 = clientConnection.call("echo", %"second call").waitFor().getStr
-  #   doAssert (response2 == "second call")
-  #   doAssert (cachedInput.getStr == "second call")
-  # test "Sending notification.":
   #   let input =  DemoObject(foo: 1);
   #   let response = clientConnection.call("echoDemoObject", %input).waitFor()
   #   assert(to(response, DemoObject) == input)
+
+  test "Sending notification.":
+    let input =  DemoObject(foo: 1);
+    clientConnection.notify("echoDemoObject", %input).waitFor()
 
   pipeClient.close()
   pipeServer.close()
