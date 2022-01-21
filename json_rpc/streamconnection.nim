@@ -44,6 +44,12 @@ proc call*(connection: StreamConnection, name: string,
           params: JsonNode): Future[Response] {.gcsafe, raises: [Exception].} =
   return connection.client.call(name, params)
 
+proc notify*(connection: StreamConnection, name: string,
+             params: JsonNode): Future[void] {.async.} =
+  let value = wrapJsonRpcResponse($rpcNotificationNode(name, params))
+  write(OutputStream(connection.output), value)
+  flush(connection.output)
+
 proc skipWhitespace(x: string, pos: int): int =
   result = pos
   while result < x.len and x[result] in Whitespace:
@@ -54,11 +60,8 @@ proc readMessage(input: AsyncInputStream): Future[Option[string]] {.async.} =
     contentLen = -1
     headerStarted = false
 
-  echo "readMessage"
   while input.readable:
     let ln = await input.readLine()
-    echo "Line = ", ln
-
     if ln.len != 0:
       let sep = ln.find(':')
       if sep == -1:
@@ -81,10 +84,7 @@ proc readMessage(input: AsyncInputStream): Future[Option[string]] {.async.} =
     else:
       if contentLen != -1:
         if input.readable(contentLen):
-           echo "before read"
-           let res = some(cast[string](`@`(input.read(contentLen))))
-           echo "after read"
-           return res
+           return some(cast[string](`@`(input.read(contentLen))))
         else:
            return none[string]();
       else:
@@ -92,20 +92,25 @@ proc readMessage(input: AsyncInputStream): Future[Option[string]] {.async.} =
   return none[string]();
 
 proc start*(conn: StreamConnection): Future[void] {.async} =
-  var message = await readMessage(conn.input);
+  try:
+    var message = await readMessage(conn.input);
 
-  while message.isSome:
-    let json = parseJson(message.get);
-    if (json{"result"}.isNil and json{"error"}.isNil):
-      let res = await route(conn, message.get);
-      if res.isSome:
-        var resultMessage = wrapJsonRpcResponse(string(res.get));
-        write(OutputStream(conn.output), string(resultMessage));
-        flush(conn.output)
-    else:
-      conn.client.processMessage(message.get)
+    while message.isSome:
+      let json = parseJson(message.get);
+      if (json{"result"}.isNil and json{"error"}.isNil):
+        let res = await route(conn, message.get);
+        if res.isSome:
+          var resultMessage = wrapJsonRpcResponse(string(res.get));
+          write(OutputStream(conn.output), string(resultMessage));
+          flush(conn.output)
+      else:
+        conn.client.processMessage(message.get)
 
-    message = await readMessage(conn.input);
+      message = await readMessage(conn.input);
+  except IOError:
+    echo "Finished..."
+    return
+
 
 proc new*(T: type StreamConnection, input: AsyncPipe, output: AsyncPipe): T =
   let asyncOutput =  asyncPipeOutput(pipe = output, allowWaitFor = true);

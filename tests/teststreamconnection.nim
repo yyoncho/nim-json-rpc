@@ -51,7 +51,12 @@ suite "Client/server over JSONRPC":
     doAssert (response == "input")
     doAssert (cachedInput.getStr == "input")
 
-  test "Call with object":
+  test "Call with object.":
+    let input =  DemoObject(foo: 1);
+    let response = clientConnection.call("echoDemoObject", %input).waitFor()
+    assert(to(response, DemoObject) == input)
+
+  test "Sending notification.":
     let input =  DemoObject(foo: 1);
     let response = clientConnection.call("echoDemoObject", %input).waitFor()
     assert(to(response, DemoObject) == input)

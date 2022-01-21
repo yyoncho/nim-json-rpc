@@ -26,6 +26,9 @@ proc getNextId*(client: RpcClient): ClientId =
 proc rpcCallNode*(path: string, params: JsonNode, id: ClientId): JsonNode =
   %{"jsonrpc": %"2.0", "method": %path, "params": params, "id": %id}
 
+proc rpcNotificationNode*(path: string, params: JsonNode): JsonNode =
+  %{"jsonrpc": %"2.0", "method": %path, "params": params}
+
 method call*(client: RpcClient, name: string,
              params: JsonNode): Future[Response] {.
     base, async, gcsafe, raises: [Defect, CatchableError, Exception].} =
