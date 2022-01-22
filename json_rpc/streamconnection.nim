@@ -17,11 +17,29 @@ type
     input*: AsyncInputStream
     output*: AsyncOutputStream
     client*: StreamClient
+  Mapper[T, U] = proc(input: T): Future[U] {.gcsafe, raises: [Defect, CatchableError, Exception].}
+  Consumer[T] = proc(input: T): Future[void] {.gcsafe, raises: [Defect, CatchableError, Exception].}
 
 proc wrapJsonRpcResponse(s: string): string =
   result = s & "\r\n"
   result = "Content-Length: " & $s.len & "\r\n\r\n" & s
 
+proc wrap[T, Q](callback: Mapper[T, Q]): RpcProc =
+  return
+    proc(input: JsonNode): Future[RpcResult] {.async} =
+      return some(StringOfJson($(%(await callback(to(input, T))))))
+
+proc wrap[T](callback: Consumer[T]): RpcProc =
+  return
+    proc(input: JsonNode): Future[RpcResult] {.async} =
+      await callback(to(input, T))
+      return none[StringOfJson]()
+
+proc register*[T, Q](server: RpcServer, name: string, rpc: Mapper[T, Q]) =
+  server.register(name, wrap(rpc))
+
+proc registerNotification*[T](server: RpcServer, name: string, rpc: Consumer[T]) =
+  server.register(name, wrap(rpc))
 method call*(self: StreamClient,
              name: string,
              params: JsonNode): Future[Response] {.async} =
@@ -107,7 +125,6 @@ proc start*(conn: StreamConnection): Future[void] {.async} =
       message = await readMessage(conn.input);
   except IOError:
     return
-
 
 proc new*(T: type StreamConnection, input: AsyncPipe, output: AsyncPipe): T =
   let asyncOutput =  asyncPipeOutput(pipe = output, allowWaitFor = true);
