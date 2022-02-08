@@ -35,9 +35,14 @@ suite "Client/server over JSONRPC":
       raises: [CatchableError, Exception].} =
     return params
 
+  proc echoDemoObjectRaiseError(params: DemoObject): Future[DemoObject] {.async,
+      raises: [CatchableError, Exception].} =
+    raise newException(ValueError, "ValueError")
+
   let serverConnection = StreamConnection.new(pipeServer);
   serverConnection.register("echo", echo)
   serverConnection.register("echoDemoObject", echoDemoObject)
+  serverConnection.register("echoDemoObjectRaise", echoDemoObjectRaiseError)
   serverConnection.registerNotification("demoObjectNotification", notifyDemoObject)
 
   discard serverConnection.start(asyncPipeInput(pipeClient));
@@ -60,10 +65,19 @@ suite "Client/server over JSONRPC":
     clientConnection.notify("demoObjectNotification", %input).waitFor()
     assert(cachedDemoObject.waitFor == input)
 
+  test "Call with object/exception":
+    let input =  DemoObject(foo: 1);
+    try:
+      discard clientConnection.call("echoDemoObjectRaise", %input).waitFor()
+      doAssert false
+    except ValueError as e:
+      discard # expected
+
+
   pipeClient.close()
   pipeServer.close()
 
 suite "Parsing from stream":
-  test "Read":
+  test "Read from file":
     let msg = waitFor readMessage(newFileStream("tests/jsonmessage"))
-    echo ">>>", msg
+    doAssert some("[1,2,3]\n") == msg
