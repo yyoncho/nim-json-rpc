@@ -133,11 +133,13 @@ proc start*[T](conn: StreamConnection, input: T): Future[void] {.async} =
     while message.isSome:
       let json = parseJson(message.get);
       if (json{"result"}.isNil and json{"error"}.isNil):
-        let res = await route(conn, message.get);
-        if res.isSome:
-          let resultMessage = wrapJsonRpcResponse(string(res.get));
-          write(OutputStream(conn.output), resultMessage);
-          flush(conn.output)
+        proc cb(fut: Future[RpcResult]) {.gcsafe.} =
+          let res = fut.read
+          if res.isSome:
+            let resultMessage = wrapJsonRpcResponse(string(res.get));
+            write(OutputStream(conn.output), resultMessage);
+            flush(OutputStream(conn.output))
+        route(conn, message.get).addCallback(cb);
       else:
         conn.client.processMessage(message.get)
       message = await readMessage(input);
