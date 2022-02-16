@@ -87,16 +87,19 @@ proc route*(router: RpcRouter, node: JsonNode): Future[RpcResult] {.async, gcsaf
         else:
           node.getOrDefault("params")
 
+      debug "Router: dispatching", `method` = methodName, id = if id != nil: id else: newJNull()
       let res = await rpcProc(if params == nil: newJArray() else: params)
 
-      return res.map((s) => wrapReply(id, s));
+      return res.map() do (s: StringOfJson) -> StringOfJson:
+        debug "Router: sending response", `method` = methodName, id = id
+        result = wrapReply(id, s)
     except InvalidRequest as err:
       debug "Error occurred within RPC", methodName = methodName, err = err.msg
       return some(wrapError(err.code, err.msg))
     except CatchableError as err:
       debug "Error occurred within RPC", methodName = methodName, err = err.msg
       return some(wrapError(
-        SERVER_ERROR, methodName & " raised an exception", id, newJString(err.msg)))
+        SERVER_ERROR, methodName & " raised an exception: " & err.msg, id, newJString(err.msg)))
 
 proc route*(router: RpcRouter, data: string): Future[RpcResult] {.async, gcsafe.} =
   ## Route to RPC from string data. Data is expected to be able to be converted to Json.

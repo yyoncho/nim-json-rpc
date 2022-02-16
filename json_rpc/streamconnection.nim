@@ -6,6 +6,7 @@ import
   faststreams/inputs,
   faststreams/textio,
   parseutils,
+  chronicles,
   faststreams/asynctools_adapters,
   ./json_rpc/[server, client]
 
@@ -79,11 +80,15 @@ proc call*(connection: StreamConnection, name: string,
           params: JsonNode): Future[Response] {.gcsafe.} =
   return connection.client.call(name, params)
 
-proc notify*(connection: StreamConnection, name: string,
-             params: JsonNode): Future[void] {.async.} =
+proc notifyImpl(connection: StreamConnection, name: string,
+                params: JsonNode): Future[void] {.async.} =
   let value = wrapJsonRpcResponse($rpcNotificationNode(name, params))
   write(OutputStream(connection.output), value)
   flush(connection.output)
+
+proc notify*(connection: StreamConnection, name: string, params: JsonNode) =
+  trace "Sending notification", notification = name, params = params
+  discard connection.notifyImpl(name, params)
 
 proc readMessage*(input: AsyncInputStream): Future[Option[string]] {.async.} =
   var

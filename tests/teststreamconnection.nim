@@ -65,7 +65,7 @@ suite "Client/server over JSONRPC":
 
   test "Sending notification.":
     let input =  DemoObject(foo: 2);
-    clientConnection.notify("demoObjectNotification", %input).waitFor()
+    clientConnection.notify("demoObjectNotification", %input)
     assert(cachedDemoObject.waitFor == input)
 
   test "Call with object/exception":
