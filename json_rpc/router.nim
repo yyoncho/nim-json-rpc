@@ -17,6 +17,9 @@ type
     procs*: Table[string, RpcProc]
     fullParams*: bool # if false send "params" to the handlers
 
+  Cancelled* = object of CatchableError
+    ## Raised by the client when the request is cancelled.
+
 const
   methodField = "method"
   paramsField = "params"
@@ -93,6 +96,8 @@ proc route*(router: RpcRouter, node: JsonNode): Future[RpcResult] {.async, gcsaf
       return res.map() do (s: StringOfJson) -> StringOfJson:
         debug "Router: sending response", `method` = methodName, id = id
         result = wrapReply(id, s)
+    except Cancelled as err:
+      return none[StringOfJson]()
     except InvalidRequest as err:
       debug "Error occurred within RPC", methodName = methodName, err = err.msg
       return some(wrapError(err.code, err.msg))

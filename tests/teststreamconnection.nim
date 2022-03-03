@@ -41,11 +41,15 @@ suite "Client/server over JSONRPC":
   proc echoDemoObjectRaiseError(params: DemoObject): Future[DemoObject] {.async.} =
     raise newException(ValueError, "ValueError")
 
+  proc echoDemoCancel(params: DemoObject): Future[DemoObject] {.async.} =
+    raise newException(Cancelled, "Cancelled")
+
   let serverConnection = StreamConnection.new(pipeServer);
   serverConnection.register("echo", echo)
   serverConnection.register("echoDemoObject", echoDemoObject)
   serverConnection.register("echoDemoObjectWithId", echoDemoObjectWithId)
   serverConnection.register("echoDemoObjectRaise", echoDemoObjectRaiseError)
+  serverConnection.register("echoDemoCancel", echoDemoCancel)
   serverConnection.registerNotification("demoObjectNotification", notifyDemoObject)
 
   discard serverConnection.start(asyncPipeInput(pipeClient));
@@ -61,26 +65,32 @@ suite "Client/server over JSONRPC":
   test "Call with object.":
     let input =  DemoObject(foo: 1);
     let response = clientConnection.call("echoDemoObject", %input).waitFor()
-    assert(to(response, DemoObject) == input)
+    doAssert(to(response, DemoObject) == input)
 
   test "Sending notification.":
     let input =  DemoObject(foo: 2);
     clientConnection.notify("demoObjectNotification", %input)
-    assert(cachedDemoObject.waitFor == input)
+    doAssert(cachedDemoObject.waitFor == input)
 
   test "Call with object/exception":
     let input =  DemoObject(foo: 1);
     try:
       discard clientConnection.call("echoDemoObjectRaise", %input).waitFor()
       doAssert false
-    except ValueError as e:
+    except ValueError:
       discard # expected
 
   test "Call with object.":
     let input =  DemoObject(foo: 1);
     let response = clientConnection.call("echoDemoObjectWithId", %input).waitFor()
-    assert(to(response, DemoObject) == input)
-    assert(futureId.read == 4)
+    doAssert(to(response, DemoObject) == input)
+    doAssert(futureId.read == 4)
+
+  test "Cancel":
+    let input =  DemoObject(foo: 1);
+    let response = clientConnection.call("echoDemoCancel", %input)
+    sleepAsync(1000).waitFor
+    doAssert response.finished == false
 
   pipeClient.close()
   pipeServer.close()
