@@ -118,9 +118,11 @@ proc readMessage*(input: AsyncInputStream): Future[Option[string]] {.async.} =
     else:
       if contentLen != -1:
         if input.readable(contentLen):
-           return some(cast[string](`@`(input.read(contentLen))))
+          let message = cast[string](`@`(input.read(contentLen)))
+          trace "Received message", message = message
+          return some(message)
         else:
-           return none[string]();
+          return none[string]();
   return none[string]();
 
 proc start*[T](conn: StreamConnection, input: T): Future[void] {.async} =

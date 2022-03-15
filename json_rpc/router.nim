@@ -95,6 +95,7 @@ proc route*(router: RpcRouter, node: JsonNode): Future[RpcResult] {.async, gcsaf
 
       return res.map() do (s: StringOfJson) -> StringOfJson:
         debug "Router: sending response", `method` = methodName, id = id
+        trace "Router: response", response = s
         result = wrapReply(id, s)
     except Cancelled as err:
       return none[StringOfJson]()
