@@ -7,8 +7,9 @@ import
   faststreams/textio,
   parseutils,
   chronicles,
+  jsonmarshal,
   faststreams/asynctools_adapters,
-  ./json_rpc/[server, client]
+  ./json_rpc/[server, client, router]
 
 export jsonmarshal, router, server
 
