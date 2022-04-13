@@ -38,11 +38,13 @@ suite "Client/server over JSONRPC":
       futureId.complete(id)
     return params
 
-  proc echoDemoObjectRaiseError(params: DemoObject): Future[DemoObject] {.async.} =
-    raise newException(ValueError, "ValueError")
+  proc echoDemoObjectRaiseError(params: DemoObject): Future[DemoObject] =
+    result = newFuture[DemoObject]()
+    result.fail(newException(ValueError, "ValueError"))
 
-  proc echoDemoCancel(params: DemoObject): Future[DemoObject] {.async.} =
-    raise newException(Cancelled, "Cancelled")
+  proc echoDemoCancel(params: DemoObject): Future[DemoObject] =
+    result = newFuture[DemoObject]()
+    result.fail(newException(Cancelled, "Cancelled"))
 
   let serverConnection = StreamConnection.new(pipeServer);
   serverConnection.register("echo", echo)
