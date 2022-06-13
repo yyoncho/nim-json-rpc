@@ -15,7 +15,7 @@ requires "nim >= 1.2.0",
          "chronicles",
          "https://github.com/status-im/news#status",
          "websock",
-         "asynctools",
+         "https://github.com/yyoncho/asynctools#non-blocking",
          "faststreams",
          "json_serialization"
 
