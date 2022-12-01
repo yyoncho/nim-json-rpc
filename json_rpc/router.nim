@@ -58,7 +58,7 @@ proc wrapError*(code: int, msg: string, id: JsonNode = newJNull(),
   # Error reply that carries version, id and error object only
   StringOfJson(
     """{"jsonrpc":"2.0","id":$1,"error":{"code":$2,"message":$3,"data":$4}}""" % [
-      $id, $code, escapeJson(msg), $data
+      (if isNil(id): "unknown" else: $id), $code, escapeJson(msg), $data
     ] & "\r\n")
 
 proc hasReturnType(params: NimNode): bool =
