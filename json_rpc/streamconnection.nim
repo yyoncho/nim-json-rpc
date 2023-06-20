@@ -9,7 +9,7 @@ import
   chronicles,
   jsonmarshal,
   faststreams/asynctools_adapters,
-  ./json_rpc/[server, client, router]
+  server, client, router
 
 export jsonmarshal, router, server
 
